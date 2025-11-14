@@ -9,13 +9,24 @@ import (
 
 func main() {
 	code := `func main(){
-		string helloworld = "Hello World"
+		string helloworld = "\"Hello\tworld\"\n
+	after two new lines"
 		print (helloworld)
+	int i = 0
+	.
+	"
 	}`
 	code = string(append([]byte(code), 0))
 	lex := lexer.New(code, "nil")
-	lex.NextToken()
+	lex.Lex()
 	for _, tok := range lex.Tokens {
-		fmt.Printf("%s:%s\n", tok.Type, tok.Value)
+		if _, ok := tok.Value.(rune); ok {
+			fmt.Printf("%s:%s\n", tok.Type, string(tok.Value.(rune)))
+		} else {
+			fmt.Printf("%s:%s\n", tok.Type, tok.Value)
+		}
+	}
+	for _, err := range lex.Errors {
+		fmt.Println(err)
 	}
 }

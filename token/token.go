@@ -41,7 +41,7 @@ const (
 	CloseBracket    = "CLOSEBRACKET"
 )
 
-var SymbolMap = map[byte]TokenType{
+var SymbolMap = map[rune]TokenType{
 	'(':  OpenParen,
 	')':  CloseParen,
 	'{':  OpenBrace,

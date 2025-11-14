@@ -10,11 +10,11 @@ import (
 )
 
 type Lexer struct {
-	Code      []byte
+	Code      []rune
 	Pos       int
 	Line      int
-	CurChar   byte
-	CharAfter byte
+	CurChar   rune
+	CharAfter rune
 	Tokens    []token.Token
 	File      string
 	Errors    []error
@@ -30,71 +30,74 @@ func (lexer *Lexer) NextChar() {
 
 func New(code string, file string) *Lexer {
 	return &Lexer{
-		[]byte(code),
+		[]rune(code),
 		0,
 		1,
-		[]byte(code)[0],
-		[]byte(code)[1],
+		[]rune(code)[0],
+		[]rune(code)[1],
 		make([]token.Token, 0),
 		file,
 		make([]error, 0),
 	}
 }
 
-func (lexer *Lexer) NextToken() {
-	switch {
-	case lexer.CurChar == 0:
-		lexer.NewToken(token.EOF, 0)
-		break
-	case utils.IsLetter(lexer.CurChar):
-		lexer.handleIdOrKeyword()
-		break
-	case utils.IsDigit(lexer.CurChar):
-		err := lexer.handleNumber()
-		if err != nil {
-			lexer.Errors = append(lexer.Errors, err)
-		}
-		break
-	case lexer.CurChar == '<' && lexer.CharAfter == '=':
-		lexer.NewToken(token.LessThanOrEqual, "<=")
-		lexer.NextChar()
-		break
-	case lexer.CurChar == '>' && lexer.CharAfter == '=':
-		lexer.NewToken(token.MoreThanOrEqual, ">=")
-		lexer.NextChar()
-		break
-	case lexer.CurChar == '!' && lexer.CharAfter == '=':
-		lexer.NewToken(token.NotEqual, "!=")
-		lexer.NextChar()
-		break
-	case lexer.CurChar == '=' && lexer.CharAfter == '=':
-		lexer.NewToken(token.DoubleEqual, "==")
-		lexer.NextChar()
-		break
-	case lexer.CurChar == '"':
-		lexer.handleString()
-		break
-	case lexer.CurChar == '\n':
-		lexer.NewToken(token.NewInstruction, lexer.CurChar)
-		lexer.Line++
-		if lexer.CharAfter == '\t' {
+func (lexer *Lexer) Lex() {
+	for {
+		switch {
+		case lexer.CurChar == 0:
+			lexer.NewToken(token.EOF, 0)
+			break
+		case utils.IsLetter(lexer.CurChar):
+			lexer.handleIdOrKeyword()
+			break
+		case utils.IsDigit(lexer.CurChar):
+			err := lexer.handleNumber()
+			if err != nil {
+				lexer.Errors = append(lexer.Errors, err)
+			}
+			break
+		case lexer.CurChar == '<' && lexer.CharAfter == '=':
+			lexer.NewToken(token.LessThanOrEqual, "<=")
 			lexer.NextChar()
-		}
-		break
-	case lexer.CurChar == ' ' || lexer.CurChar == '\t':
-		break
-	default:
-		if oneCharToken, ok := token.SymbolMap[lexer.CurChar]; ok {
-			lexer.NewToken(oneCharToken, lexer.CurChar)
+			break
+		case lexer.CurChar == '>' && lexer.CharAfter == '=':
+			lexer.NewToken(token.MoreThanOrEqual, ">=")
+			lexer.NextChar()
+			break
+		case lexer.CurChar == '!' && lexer.CharAfter == '=':
+			lexer.NewToken(token.NotEqual, "!=")
+			lexer.NextChar()
+			break
+		case lexer.CurChar == '=' && lexer.CharAfter == '=':
+			lexer.NewToken(token.DoubleEqual, "==")
+			lexer.NextChar()
+			break
+		case lexer.CurChar == '"':
+			err := lexer.handleString()
+			if err != nil {
+				lexer.Errors = append(lexer.Errors, err)
+			}
+			break
+		case lexer.CurChar == '\n':
+			lexer.NewToken(token.NewInstruction, lexer.CurChar)
+			lexer.Line++
+			break
+		case lexer.CurChar == ' ' || lexer.CurChar == '\t':
+			break
+		default:
+			if oneCharToken, ok := token.SymbolMap[lexer.CurChar]; ok {
+				lexer.NewToken(oneCharToken, lexer.CurChar)
+				break
+			}
+			lexer.NewToken(token.Invalid, lexer.CurChar)
+			lexer.Errors = append(lexer.Errors, fmt.Errorf("Invalid character %s on a line %d", string(lexer.CurChar), lexer.Line))
 			break
 		}
-		lexer.NewToken(token.Invalid, lexer.CurChar)
-		lexer.Errors = append(lexer.Errors, fmt.Errorf("Invalid character %s on a line %d", lexer.CurChar, lexer.Line))
-		break
-	}
-	if lexer.Tokens[len(lexer.Tokens)-1].Type != token.EOF {
+		if lexer.Tokens[len(lexer.Tokens)-1].Type == token.EOF {
+			break
+		}
 		lexer.NextChar()
-		lexer.NextToken()
+
 	}
 }
 
@@ -111,7 +114,7 @@ func (lexer *Lexer) NewToken(tokentype token.TokenType, value any) {
 func (lexer *Lexer) handleIdOrKeyword() {
 	str := ""
 	for utils.IsLetter(lexer.CurChar) {
-		str = string(append([]byte(str), lexer.CurChar))
+		str = string(append([]rune(str), lexer.CurChar))
 		if utils.IsLetter(lexer.CharAfter) {
 			lexer.NextChar()
 		} else {
@@ -128,8 +131,8 @@ func (lexer *Lexer) handleIdOrKeyword() {
 func (lexer *Lexer) handleNumber() error {
 	num := ""
 	hasDot := false
-	for utils.IsLetter(lexer.CurChar) || lexer.CurChar == '.' {
-		num = string(append([]byte(num), lexer.CurChar))
+	for utils.IsDigit(lexer.CurChar) || lexer.CurChar == '.' {
+		num = string(append([]rune(num), lexer.CurChar))
 		if lexer.CurChar == '.' {
 			hasDot = true
 		}
@@ -144,24 +147,37 @@ func (lexer *Lexer) handleNumber() error {
 			lexer.NewToken(token.Float, floatNum)
 		} else {
 			lexer.NewToken(token.Invalid, "NaN")
-			return fmt.Errorf("Error at line %d: %s is not a number", lexer.Line, num)
+			return fmt.Errorf("Error at line %d: %s is not a number", lexer.Line, string(num))
 		}
 	} else {
 		intNum, err := strconv.ParseInt(num, 10, 64)
 		if err != nil {
-			return fmt.Errorf("Error at line %d: %s is not a number", lexer.Line, num)
+			return fmt.Errorf("Error at line %d: %s is not a number", lexer.Line, string(num))
 		}
 		lexer.NewToken(token.Int, intNum)
 	}
 	return nil
 }
 
-func (lexer *Lexer) handleString() {
+func (lexer *Lexer) handleString() error {
 	lexer.NextChar()
 	str := ""
+	originalLine := lexer.Line
 	for lexer.CurChar != '"' {
-		str = string(append([]byte(str), lexer.CurChar))
+		if lexer.CurChar == '\\' {
+			lexer.NextChar()
+			str = string(append([]rune(str), utils.EscapeSeq[lexer.CurChar]))
+		} else {
+			str = string(append([]rune(str), lexer.CurChar))
+		}
+		if lexer.CurChar == 0 {
+			return fmt.Errorf("Error at line %d: missing \"", originalLine)
+		}
+		if lexer.CurChar == '\n' {
+			lexer.Line++
+		}
 		lexer.NextChar()
 	}
 	lexer.NewToken(token.String, str)
+	return nil
 }
