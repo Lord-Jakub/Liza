@@ -29,16 +29,22 @@ func (lexer *Lexer) NextChar() {
 }
 
 func New(code string, file string) *Lexer {
-	return &Lexer{
+	lexer := &Lexer{
 		[]rune(code),
 		0,
 		1,
-		[]rune(code)[0],
-		[]rune(code)[1],
+		0,
+		0,
 		make([]token.Token, 0),
 		file,
 		make([]error, 0),
 	}
+	if len(code) > 2 {
+		lexer.CurChar = []rune(code)[0]
+		lexer.CharAfter = []rune(code)[1]
+	}
+
+	return lexer
 }
 
 func (lexer *Lexer) Lex() {
