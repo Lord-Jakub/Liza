@@ -11,20 +11,22 @@ import (
 )
 
 type Parser struct {
-	Tokens  []token.Token
-	Pos     int
-	CurTok  token.Token
-	NextTok token.Token
-	Program ast.Program
-	Errors  []error
+	Tokens    []token.Token
+	Pos       int
+	CurTok    token.Token
+	NextTok   token.Token
+	Program   ast.Program
+	Errors    []error
+	Externals []string
 }
 
 func New(tokens []token.Token) *Parser {
 	parser := &Parser{
-		Tokens:  tokens,
-		Pos:     0,
-		Program: ast.Program{Namespaces: make(map[string]ast.BodyStatement, 0)},
-		Errors:  make([]error, 0),
+		Tokens:    tokens,
+		Pos:       0,
+		Program:   ast.Program{Namespaces: make(map[string]ast.BodyStatement, 0)},
+		Errors:    make([]error, 0),
+		Externals: make([]string, 0),
 	}
 	if len(tokens) > 2 {
 		parser.CurTok = tokens[0]
@@ -144,10 +146,15 @@ func (parser *Parser) Parse(root, path string) {
 		parser.Advance()
 	}
 	var imports []string
-	for parser.CurTok.Type == token.Keyword && parser.CurTok.Value.(string) == "import" {
+	for parser.CurTok.Type == token.Keyword && (parser.CurTok.Value.(string) == "import" || parser.CurTok.Value.(string) == "external") {
 		if parser.NextTok.Type == token.String {
-			parser.Advance()
-			imports = append(imports, parser.CurTok.Value.(string))
+			if parser.CurTok.Value.(string) == "import" {
+				parser.Advance()
+				imports = append(imports, parser.CurTok.Value.(string))
+			} else {
+				parser.Advance()
+				parser.Externals = append(parser.Externals, parser.CurTok.Value.(string))
+			}
 		} else {
 			parser.Errors = append(parser.Errors, fmt.Errorf("Error at line %d: expected string, got %s", parser.NextTok.Line, parser.NextTok.Value))
 			parser.Advance()
