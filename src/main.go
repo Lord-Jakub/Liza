@@ -76,7 +76,7 @@ func main() {
 	}
 	if ctx.Interpret {
 		interpreter.GetNamespaces(&par.Program)
-		interpreter.Init()
+		interpreter.Init(par.Externals, ctx.Root, ctx.Path)
 		env := interpreter.Namespaces["main"]
 		env.Namespace = "main"
 		main, _ := interpreter.Namespaces["main"].GetFunc("main")

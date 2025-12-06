@@ -3,15 +3,31 @@ package interpreter
 import (
 	"fmt"
 	"lizalang/ast"
+	"lizalang/interpreter/ffi"
 	"lizalang/interpreter/object"
+	"os"
+	"path/filepath"
+	"runtime"
+	"unsafe"
 )
 
 var (
 	Namespaces map[string]*Environment                         = make(map[string]*Environment)
 	BuildIns   map[string]func(*Environment, []ast.Expression) = make(map[string]func(*Environment, []ast.Expression))
+	Externals  map[string]External                             = make(map[string]External)
 )
 
-func Init() {
+type External struct {
+	Lib       unsafe.Pointer
+	Functions map[string]Foreign
+}
+
+type Foreign struct {
+	Handle    unsafe.Pointer
+	Signiture unsafe.Pointer
+}
+
+func Init(externals []string, root, path string) {
 	BuildIns["print"] = func(env *Environment, args []ast.Expression) {
 		for _, arg := range args {
 			argVal, err := Eval(arg, env)
@@ -38,6 +54,28 @@ func Init() {
 		var obj object.Object
 		obj = &object.IntObject{int64(arr.Len)}
 		env.Return = &obj
+	}
+	for _, external := range externals {
+		external_path := external
+		if runtime.GOOS == "windows" {
+			external_path += ".dll"
+		} else {
+			external_path += ".so"
+		}
+		var dir string
+		if _, err := os.Stat(filepath.Join(root, "libs", external_path)); err == nil {
+			dir = filepath.Join(root, "libs", external_path)
+		} else if _, err := os.Stat(filepath.Join(path, external_path)); err == nil {
+			dir = filepath.Join(path, external_path)
+		} else {
+			// return nil, fmt.Errorf("%s was not found in %s or %s", external_path, root, path)
+			// TODO: some error handling
+		}
+		Externals[external] = External{
+			Lib:       ffi.LoadLib(dir),
+			Functions: make(map[string]Foreign),
+		}
+
 	}
 }
 

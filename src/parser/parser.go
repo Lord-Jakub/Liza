@@ -228,6 +228,11 @@ func (parser *Parser) ParseNode() ast.Node {
 			constant.Mutable = false
 			node = constant
 			break
+		case "foreign":
+			parser.Advance()
+			node = parser.ParseFunctionDeclaration()
+			node.(*ast.FunctionDeclarationStatement).Foreign = true
+			break
 		}
 		break
 	case token.Identifier:
@@ -343,6 +348,7 @@ func (parser *Parser) ParseFunctionCall() ast.FunctionCall {
 func (parser *Parser) ParseFunctionDeclaration() ast.FunctionDeclarationStatement {
 	var function ast.FunctionDeclarationStatement
 	function.Type = &ast.Void{}
+	function.Foreign = false
 	if parser.NextTok.Type == token.Identifier {
 		parser.Advance()
 		function.Name = parser.CurTok
