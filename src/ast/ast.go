@@ -134,11 +134,12 @@ type ReturnStatement struct {
 func (*ReturnStatement) stmt() {}
 
 type FunctionDeclarationStatement struct {
-	Name    token.Token
-	Type    Type
-	Args    []VariableDeclarationStatement
-	Body    Node
-	Foreign bool
+	Name     token.Token
+	Type     Type
+	Args     []VariableDeclarationStatement
+	Body     Node
+	Foreign  bool
+	External token.Token
 }
 
 func (*FunctionDeclarationStatement) stmt() {}

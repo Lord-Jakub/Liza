@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"lizalang/ast"
+	"lizalang/interpreter/ffi"
 	"lizalang/interpreter/object"
 )
 
@@ -108,6 +109,16 @@ func (env *Environment) GetFunc(name string) (*ast.FunctionDeclarationStatement,
 }
 
 func (env *Environment) DeclareFunc(name string, function *ast.FunctionDeclarationStatement) error {
+	if function.Foreign {
+		handle, ok := Externals[function.External.Value.(string)]
+		if !ok {
+			// TODO: handle error
+		}
+		fn := ffi.GetSymbol(function.Name.Value.(string), handle.Lib)
+		fn_sig := ffi.LoadFn(*function)
+		handle.Functions[name] = Foreign{fn, fn_sig, function.Type.T()}
+		return nil
+	}
 	_, ok := env.StoreFuncs[name]
 	if !ok {
 		if env.Outer != nil {

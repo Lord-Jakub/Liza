@@ -14,7 +14,7 @@ import (
 var (
 	Namespaces map[string]*Environment                         = make(map[string]*Environment)
 	BuildIns   map[string]func(*Environment, []ast.Expression) = make(map[string]func(*Environment, []ast.Expression))
-	Externals  map[string]External                             = make(map[string]External)
+	Externals  map[string]*External                            = make(map[string]*External)
 )
 
 type External struct {
@@ -25,6 +25,7 @@ type External struct {
 type Foreign struct {
 	Handle    unsafe.Pointer
 	Signiture unsafe.Pointer
+	Return    string
 }
 
 func Init(externals []string, root, path string) {
@@ -71,7 +72,7 @@ func Init(externals []string, root, path string) {
 			// return nil, fmt.Errorf("%s was not found in %s or %s", external_path, root, path)
 			// TODO: some error handling
 		}
-		Externals[external] = External{
+		Externals[external] = &External{
 			Lib:       ffi.LoadLib(dir),
 			Functions: make(map[string]Foreign),
 		}
@@ -238,6 +239,10 @@ func Interpret(node ast.Node, env *Environment) error {
 
 		}
 
+		break
+	case (ast.BinaryExpression):
+		binary := node.(ast.BinaryExpression)
+		Eval(&binary, env)
 		break
 	}
 

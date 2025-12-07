@@ -211,7 +211,7 @@ func (parser *Parser) ParseNode() ast.Node {
 		}
 		switch parser.CurTok.Value {
 		case "func":
-			node = parser.ParseFunctionDeclaration()
+			node = parser.ParseFunctionDeclaration(false)
 			break
 		case "if":
 			node = parser.ParseIfStatement()
@@ -230,8 +230,8 @@ func (parser *Parser) ParseNode() ast.Node {
 			break
 		case "foreign":
 			parser.Advance()
-			node = parser.ParseFunctionDeclaration()
-			node.(*ast.FunctionDeclarationStatement).Foreign = true
+			node = parser.ParseFunctionDeclaration(true)
+
 			break
 		}
 		break
@@ -245,6 +245,16 @@ func (parser *Parser) ParseNode() ast.Node {
 			break
 		case token.OpenBracket:
 			node = parser.ParseVariableAssigment()
+			break
+		case token.Dot:
+			var foreignCall ast.BinaryExpression
+			foreignCall.Left = &ast.VariableExpression{parser.CurTok}
+			parser.Advance()
+			foreignCall.Op = parser.CurTok
+			parser.Advance()
+			call := parser.ParseFunctionCall()
+			foreignCall.Right = &call
+			node = foreignCall
 			break
 
 		}
@@ -345,10 +355,15 @@ func (parser *Parser) ParseFunctionCall() ast.FunctionCall {
 	return function
 }
 
-func (parser *Parser) ParseFunctionDeclaration() ast.FunctionDeclarationStatement {
+func (parser *Parser) ParseFunctionDeclaration(isForeign bool) ast.FunctionDeclarationStatement {
 	var function ast.FunctionDeclarationStatement
 	function.Type = &ast.Void{}
-	function.Foreign = false
+	function.Foreign = isForeign
+	if isForeign {
+		parser.Advance()
+		function.External = parser.CurTok
+		parser.Advance()
+	}
 	if parser.NextTok.Type == token.Identifier {
 		parser.Advance()
 		function.Name = parser.CurTok
@@ -374,8 +389,9 @@ func (parser *Parser) ParseFunctionDeclaration() ast.FunctionDeclarationStatemen
 		function.Type = parser.ParseType()
 		parser.Advance()
 	}
-	function.Body = parser.ParseNode()
-
+	if !isForeign {
+		function.Body = parser.ParseNode()
+	}
 	return function
 }
 

@@ -3,6 +3,7 @@
 package ffi
 
 import (
+	"fmt"
 	"lizalang/ast"
 	"lizalang/interpreter/object"
 	"unsafe"
@@ -15,11 +16,12 @@ import (
 //#cgo LDFLAGS: -ldl -lffi
 //#include <dlfcn.h>
 //#include <ffi.h>
+//#include <stdlib.h>
 import "C"
 
 func LoadLib(external string) unsafe.Pointer {
 	handle := C.dlopen(C.CString(external), C.RTLD_LAZY)
-	//fmt.Println(C.GoString((*C.char)(C.dlerror())))
+	fmt.Println(C.GoString((*C.char)(C.dlerror())))
 	return handle
 }
 
@@ -42,34 +44,52 @@ func LoadFn(functionDeclaration ast.FunctionDeclarationStatement) unsafe.Pointer
 	}
 
 	C.ffi_prep_cif(cif, C.FFI_DEFAULT_ABI, nargs, rtype, argtypes_ptr) // ffi_status ffi_prep_cif(ffi_cif *cif, ffi_abi abi, unsigned int nargs, ffi_type *rtype, ffi_type **argtypes)
+	fmt.Println(C.GoString((*C.char)(C.dlerror())))
+
 	return unsafe.Pointer(&cif)
 }
 
 func Call(cif unsafe.Pointer, fn unsafe.Pointer, rtype string, args []object.Object) object.Object {
-	avalues := make([]unsafe.Pointer, len(args))
+	// allocate argument array in C
+	// otherwise get panic: runtime error: cgo argument has Go pointer to unpinned Go pointer
+	// C cannot acces Go heap
+	cArgs := C.malloc(C.size_t(len(args)) * C.size_t(unsafe.Sizeof(uintptr(0))))
+	argPtrs := (*[1 << 30]unsafe.Pointer)(cArgs)[:len(args):len(args)]
+
 	for i, arg := range args {
-		value := arg.GetValue()
-		if str, ok := value.(string); ok {
-			value = C.CString(str)
+		switch v := arg.GetValue().(type) {
+		case int64:
+			ptr := C.malloc(C.size_t(unsafe.Sizeof(C.int(0))))
+			*(*C.int)(ptr) = C.int(int32(v))
+			argPtrs[i] = ptr
+		case float64:
+			ptr := C.malloc(C.size_t(unsafe.Sizeof(C.float(0))))
+			*(*C.float)(ptr) = C.float(v)
+			argPtrs[i] = ptr
+		case string:
+			cstr := C.CString(v)
+			argPtrs[i] = unsafe.Pointer(cstr)
+		default:
+			panic("unsupported type")
 		}
-		avalues[i] = unsafe.Pointer(&value)
 	}
-	var avalues_ptr *unsafe.Pointer
-	if len(avalues) > 0 {
-		avalues_ptr = &avalues[0]
-	}
+	cArgs = unsafe.Pointer(&argPtrs[0])
 	rettype := GetType(rtype)
 	ret := C.malloc(C.size_t(rettype.size))
-	C.ffi_call((*C.ffi_cif)(cif), (*[0]byte)(fn), ret, avalues_ptr) // void ffi_call (ffi_cif *cif, void *fn, void *rvalue, void **avalues)
+	C.ffi_call((*C.ffi_cif)(cif), (*[0]byte)(fn), ret, (*unsafe.Pointer)(cArgs)) // void ffi_call (ffi_cif *cif, void *fn, void *rvalue, void **avalues)
+	var result object.Object = &object.VoidObject{Value: *(*any)(ret)}
 	switch rtype {
 	case "int":
-		return &object.IntObject{Value: int64(*(*int)(ret))}
+		result = &object.IntObject{Value: int64(*(*int)(ret))}
 	case "float":
-		return &object.FloatObject{Value: float64(*(*float32)(ret))}
+		result = &object.FloatObject{Value: float64(*(*float32)(ret))}
 	case "string":
-		return &object.StringObject{Value: C.GoString(*(**C.char)(ret))}
+		result = &object.StringObject{Value: C.GoString(*(**C.char)(ret))}
 	}
-	return &object.VoidObject{Value: *(*any)(ret)}
+
+	C.free(cArgs)
+	C.free(ret)
+	return result
 }
 
 func GetType(t string) *C.ffi_type {

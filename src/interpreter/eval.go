@@ -3,6 +3,7 @@ package interpreter
 import (
 	"fmt"
 	"lizalang/ast"
+	"lizalang/interpreter/ffi"
 	"lizalang/interpreter/object"
 	"math"
 )
@@ -119,8 +120,28 @@ func EvalUnary(unary *ast.UnaryExpression, env *Environment) (object.Object, err
 
 func EvalBinary(binary *ast.BinaryExpression, env *Environment) (object.Object, error) {
 	if binary.Op.Value.(string) == "." {
+		// utils.PrintData(binary)
+		// utils.PrintData(Externals)
+
 		switch binary.Left.(type) {
 		case *ast.VariableExpression:
+			if external, ok := Externals[binary.Left.(*ast.VariableExpression).Value.Value.(string)]; ok {
+				if fnCall, ok := binary.Right.(*ast.FunctionCall); ok {
+					if function, ok := external.Functions[fnCall.Identifier.Value.(string)]; ok {
+						var args []object.Object
+						for _, arg := range fnCall.Args {
+							argObj, err := Eval(arg, env)
+							if err != nil {
+								return &object.VoidObject{}, err
+							}
+							args = append(args, argObj)
+						}
+						// fmt.Print("Calling: ")
+						// utils.PrintData(function)
+						return ffi.Call(function.Signiture, function.Handle, function.Return, args), nil
+					}
+				}
+			}
 			if namespace, ok := Namespaces[binary.Left.(*ast.VariableExpression).Value.Value.(string)]; ok {
 				return Eval(binary.Right, namespace)
 			}
