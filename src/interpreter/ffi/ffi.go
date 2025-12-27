@@ -53,27 +53,27 @@ func Call(cif unsafe.Pointer, fn unsafe.Pointer, rtype string, args []object.Obj
 	// allocate argument array in C
 	// otherwise get panic: runtime error: cgo argument has Go pointer to unpinned Go pointer
 	// C cannot acces Go heap
-	cArgs := C.malloc(C.size_t(len(args)) * C.size_t(unsafe.Sizeof(uintptr(0))))
-	argPtrs := (*[1 << 30]unsafe.Pointer)(cArgs)[:len(args):len(args)]
-
+	cArgs := C.malloc(C.size_t(len(args)) * C.size_t(unsafe.Sizeof(unsafe.Pointer(nil))))
+	argArray := (*[1 << 28]unsafe.Pointer)(cArgs)[:len(args):len(args)]
 	for i, arg := range args {
+		var ptr unsafe.Pointer
 		switch v := arg.GetValue().(type) {
 		case int64:
-			ptr := C.malloc(C.size_t(unsafe.Sizeof(C.int(0))))
+			ptr = C.malloc(C.size_t(unsafe.Sizeof(C.int(4))))
 			*(*C.int)(ptr) = C.int(int32(v))
-			argPtrs[i] = ptr
 		case float64:
-			ptr := C.malloc(C.size_t(unsafe.Sizeof(C.float(0))))
+			ptr = C.malloc(C.size_t(unsafe.Sizeof(C.float(0))))
 			*(*C.float)(ptr) = C.float(v)
-			argPtrs[i] = ptr
 		case string:
 			cstr := C.CString(v)
-			argPtrs[i] = unsafe.Pointer(cstr)
+			ptr = C.malloc(C.size_t(unsafe.Sizeof(uintptr(0))))
+			*(*unsafe.Pointer)(ptr) = unsafe.Pointer(cstr)
 		default:
 			panic("unsupported type")
 		}
+		argArray[i] = ptr
 	}
-	cArgs = unsafe.Pointer(&argPtrs[0])
+	//cArgs = unsafe.Pointer(&argPtrs[0])
 	rettype := GetType(rtype)
 	ret := C.malloc(C.size_t(rettype.size))
 	C.ffi_call((*C.ffi_cif)(cif), (*[0]byte)(fn), ret, (*unsafe.Pointer)(cArgs)) // void ffi_call (ffi_cif *cif, void *fn, void *rvalue, void **avalues)
