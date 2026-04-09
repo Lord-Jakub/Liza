@@ -19,14 +19,6 @@ type Lexer struct {
 	Errors   []error
 }
 
-func (lexer *Lexer) Advance() {
-	lexer.Pos++
-	lexer.CurChar = lexer.NextChar
-	if lexer.Pos+1 < len(lexer.Code) {
-		lexer.NextChar = lexer.Code[lexer.Pos+1]
-	}
-}
-
 func New(code string, file string) *Lexer {
 	lexer := &Lexer{
 		[]rune(code + string(0)),
@@ -46,8 +38,16 @@ func New(code string, file string) *Lexer {
 	return lexer
 }
 
+func (lexer *Lexer) Advance() {
+	lexer.Pos++
+	lexer.CurChar = lexer.NextChar
+	if lexer.Pos+1 < len(lexer.Code) {
+		lexer.NextChar = lexer.Code[lexer.Pos+1]
+	}
+}
+
 func (lexer *Lexer) Lex() {
-	for {
+	for lexer.Pos <= len(lexer.Code) {
 		switch {
 		case lexer.CurChar == 0:
 			lexer.NewToken(token.EOF, 0)
@@ -118,9 +118,7 @@ func (lexer *Lexer) Lex() {
 			lexer.Errors = append(lexer.Errors, fmt.Errorf("Invalid character %s on a line %d", string(lexer.CurChar), lexer.Line))
 			break
 		}
-		if lexer.Tokens[len(lexer.Tokens)-1].Type == token.EOF {
-			break
-		}
+
 		lexer.Advance()
 
 	}
